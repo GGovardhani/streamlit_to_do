@@ -17,6 +17,12 @@ USERS = {
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
+def safe_rerun():
+    # Safe rerun by toggling a session_state variable to force refresh
+    if "rerun_trigger" not in st.session_state:
+        st.session_state.rerun_trigger = False
+    st.session_state.rerun_trigger = not st.session_state.rerun_trigger
+
 if not st.session_state.logged_in:
     st.title("🔐 Login to Govardhani Space")
     username = st.text_input("Username")
@@ -26,7 +32,7 @@ if not st.session_state.logged_in:
             st.session_state.logged_in = True
             st.session_state.user = username
             st.success(f"Login successful! Welcome {username}.")
-            st.rerun()
+            safe_rerun()
         else:
             st.error("Invalid credentials. Try again.")
 
@@ -90,12 +96,6 @@ else:
         weekly_task_count = sum(len(tasks_by_date.get(d, [])) for d in week_dates)
         st.write(f"You added **{weekly_task_count} tasks** this week! Keep going 💪")
 
-        st.subheader("📷 Daily Picture Upload")
-        uploaded_file = st.file_uploader("Upload your daily photo", type=["jpg", "jpeg", "png"])
-        if uploaded_file:
-           st.image(uploaded_file, caption="Your uploaded photo", use_container_width=True)
-
-
     elif page == "My calendar":
         st.title("📅 My Calendar Task Tracker")
 
@@ -111,22 +111,34 @@ else:
                 with open(TASKS_FILE, "w") as f:
                     json.dump(tasks_by_date, f)
                 st.success("Task added!")
-                st.experimental_rerun()
+                safe_rerun()
             else:
                 st.warning("Please enter a valid task.")
 
         st.subheader(f"📌 Tasks on {date_str}")
         if date_str in tasks_by_date and tasks_by_date[date_str]:
             changed = False
+            updated_tasks = []
             for i, task_obj in enumerate(tasks_by_date[date_str]):
-                col1, col2 = st.columns([0.05, 0.95])
+                col1, col2, col3 = st.columns([0.05, 0.75, 0.2])
                 with col1:
-                    done = st.checkbox("", value=task_obj["done"], key=f"{date_str}_{i}")
+                    done = st.checkbox("", value=task_obj["done"], key=f"{date_str}_done_{i}")
                 with col2:
                     st.markdown(f"- {task_obj['task']}")
-                if done != task_obj["done"]:
-                    tasks_by_date[date_str][i]["done"] = done
-                    changed = True
+                with col3:
+                    delete = st.button("🗑️ Delete", key=f"{date_str}_del_{i}")
+
+                if delete:
+                    continue  # Skip adding this task to updated list (i.e., delete it)
+                else:
+                    task_obj["done"] = done
+                    updated_tasks.append(task_obj)
+
+            # Update tasks and save
+            tasks_by_date[date_str] = updated_tasks
+            with open(TASKS_FILE, "w") as f:
+                json.dump(tasks_by_date, f)
+
             if changed:
                 with open(TASKS_FILE, "w") as f:
                     json.dump(tasks_by_date, f)
@@ -146,17 +158,24 @@ else:
             tasks.append({"task": new_task, "done": False})
             with open(TODO_FILE, "w") as f:
                 json.dump(tasks, f)
-            st.experimental_rerun()
+            safe_rerun()
 
-        changed = False
+        updated_tasks = []
         for i, task in enumerate(tasks):
-            checked = st.checkbox(task["task"], value=task["done"], key=f"todo_{i}")
-            if checked != task["done"]:
-                tasks[i]["done"] = checked
-                changed = True
-        if changed:
-            with open(TODO_FILE, "w") as f:
-                json.dump(tasks, f)
+            col1, col2, col3 = st.columns([0.05, 0.75, 0.2])
+            with col1:
+                checked = st.checkbox("", value=task["done"], key=f"todo_done_{i}")
+            with col2:
+                st.markdown(f"- {task['task']}")
+            with col3:
+                delete = st.button("🗑️ Delete", key=f"todo_delete_{i}")
+
+            if not delete:
+                updated_tasks.append({"task": task["task"], "done": checked})
+
+        # Save updated task list
+        with open(TODO_FILE, "w") as f:
+            json.dump(updated_tasks, f)
 
     elif page == "Habits":
         st.title("📊 Habit Tracker")
@@ -172,7 +191,7 @@ else:
                 habit_data[new_habit] = []
                 with open(HABITS_FILE, "w") as f:
                     json.dump(habit_data, f)
-                st.experimental_rerun()
+                safe_rerun()
 
         st.subheader("🌿 Track Today's Habits")
         today_str = datetime.now().strftime("%Y-%m-%d")
@@ -232,41 +251,8 @@ else:
         st.markdown("### 🧪 Projects I've Worked On")
         st.write("- 🎮 **Mini Python Games**: Rock-Paper-Scissors, Number Guessing Game")
         st.write("- ✅ **Task Manager App**: Built in Python to manage daily tasks")
-        st.write("- 🌐 **Personal Portfolio**: Showcasing my work and skills")
+        st.write("- 🌐 **Personal Portfolio**: Showcasing my skills and projects")
+        st.write("- 🤖 **Chatbots & AI**: Integrating NLP models")
+        st.write("- 🔌 **IoT Projects**: Sensor data collection and visualization")
 
-        st.markdown("### 🚀 Featured Projects")
-        projects = [
-            {
-                "title": "Smart Drain Shield System",
-                "description": "An IoT-based system to detect waterlogging and send geo-tagged alerts.",
-                "tech": "Arduino, Sensors, Python, Streamlit",
-                "link": "https://github.com/govardhani/smart-drain-shield"
-            },
-            {
-                "title": "Multilingual AI Chatbot",
-                "description": "Supports Indic languages using ai4bharat/IndicTrans integration.",
-                "tech": "Python, Hugging Face, Streamlit",
-                "link": "https://github.com/govardhani/indic-chatbot"
-            },
-            {
-                "title": "My Life Dashboard",
-                "description": "A personal productivity dashboard with habits, tasks, and daily uploads.",
-                "tech": "Python, Streamlit, JSON",
-                "link": "https://github.com/govardhani/my-life-dashboard"
-            }
-        ]
-
-        for project in projects:
-            st.markdown(f"#### {project['title']}")
-            st.write(project["description"])
-            st.write(f"**Tech Stack:** {project['tech']}")
-            st.markdown(f"[🔗 GitHub Link]({project['link']})")
-            st.markdown("---")
-
-        st.markdown("### 📜 Certifications & Workshops")
-        st.write("- CS50: Introduction to Computer Science – NPTEL")
-        st.write("- Introduction to IoT – SkillDzire")
-        st.write("- Participated in Drone Technology Workshop")
-
-        st.markdown("### 🌟 Aspirations")
-        st.write("I aspire to become a software developer who builds ethical and inclusive technology for everyone.")
+# You can add any additional helper functions or utilities below if needed
