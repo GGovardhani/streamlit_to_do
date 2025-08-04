@@ -93,7 +93,8 @@ else:
         st.subheader("📷 Daily Picture Upload")
         uploaded_file = st.file_uploader("Upload your daily photo", type=["jpg", "jpeg", "png"])
         if uploaded_file:
-            st.image(uploaded_file, caption="Your uploaded photo", use_column_width=True)
+           st.image(uploaded_file, caption="Your uploaded photo", use_container_width=True)
+
 
     elif page == "My calendar":
         st.title("📅 My Calendar Task Tracker")
