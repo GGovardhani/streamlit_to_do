@@ -1,15 +1,19 @@
 import streamlit as st
-from datetime import datetime,timedelta
-from datetime import date
+from datetime import datetime, timedelta, date
 import json
 import os
 import random
 
-# Dummy login credentials
-USERNAME = "govardhani"
-PASSWORD = "Jennie.2005"  # Replace with a secure method later
+# Set page config at the very top (global for entire app)
+st.set_page_config(page_title="Govardhani Space", layout="centered")
 
-# Login logic
+# Dummy login credentials for 2 users
+USERS = {
+    "govardhani": "Jennie.2005",
+    "verma": "exe"  # Example password for your brother
+}
+
+# Initialize login state
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
@@ -18,21 +22,31 @@ if not st.session_state.logged_in:
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
     if st.button("Login"):
-        if username == USERNAME and password == PASSWORD:
+        if username in USERS and USERS[username] == password:
             st.session_state.logged_in = True
-            st.success("Login successful!")
+            st.session_state.user = username
+            st.success(f"Login successful! Welcome {username}.")
+            st.rerun()
         else:
             st.error("Invalid credentials. Try again.")
+
 else:
-    # Sidebar for navigation
+    user = st.session_state.user
+    user_data_dir = f"data/{user}"
+    os.makedirs(user_data_dir, exist_ok=True)
+
+    TASKS_FILE = os.path.join(user_data_dir, "tasks.json")
+    TODO_FILE = os.path.join(user_data_dir, "todo.json")
+    HABITS_FILE = os.path.join(user_data_dir, "habits.json")
+
+    # Sidebar navigation
     st.sidebar.title("Navigation")
-    page = st.sidebar.radio("Go to", ["Home", "To-Do List", "Habits", "Portfolio","My calender"])
+    page = st.sidebar.radio("Go to", ["Home", "To-Do List", "Habits", "Portfolio", "My calendar"])
 
-    # Header
-    st.title("Welcome to Govardhani Space 🚀")
-    st.subheader(f"Hello Govardhani! Today is {datetime.now().strftime('%A, %d %B %Y')}")
+    # Header & greeting
+    st.title(f"Welcome to Govardhani Space 🚀")
+    st.subheader(f"Hello {user.capitalize()}! Today is {datetime.now().strftime('%A, %d %B %Y')}")
 
-    # Motivational Quote
     quotes = [
         "Push yourself, because no one else is going to do it for you.",
         "Success doesn’t just find you. You have to go out and get it.",
@@ -40,20 +54,27 @@ else:
         "Small steps every day lead to big results."
     ]
     st.info(random.choice(quotes))
-    # ---------- Load tasks_by_date for use in both Home and Calendar ----------
-    TASKS_FILE = "tasks.json"
+
+    # Load tasks_by_date globally for calendar/home
     if os.path.exists(TASKS_FILE):
         with open(TASKS_FILE, "r") as f:
             tasks_by_date = json.load(f)
     else:
         tasks_by_date = {}
 
-    # Page Routing
     if page == "Home":
         st.write("📌 This is your personal dashboard. Add your daily picture, track goals, and stay inspired!")
-        if "tasks" in st.session_state and st.session_state.tasks:
-            total = len(st.session_state.tasks)
-            completed = sum(task["done"] for task in st.session_state.tasks)
+
+        # Load todo tasks for progress bar
+        if os.path.exists(TODO_FILE):
+            with open(TODO_FILE, "r") as f:
+                tasks = json.load(f)
+        else:
+            tasks = []
+
+        if tasks:
+            total = len(tasks)
+            completed = sum(task["done"] for task in tasks)
             percent = int((completed / total) * 100)
 
             st.write(f"✅ You’ve completed {completed} out of {total} tasks ({percent}%)")
@@ -62,40 +83,24 @@ else:
             st.bar_chart({"Completed": completed, "Pending": total - completed})
         else:
             st.info("No tasks yet. Add some in the To-Do List section!")
-            
+
         st.subheader("📊 Weekly Summary")
-        # Get last 7 days
         today = datetime.today()
         week_dates = [(today - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
-        # Count tasks from last 7 days
-        weekly_task_count = sum(len(tasks_by_date.get(date, [])) for date in week_dates)
+        weekly_task_count = sum(len(tasks_by_date.get(d, [])) for d in week_dates)
         st.write(f"You added **{weekly_task_count} tasks** this week! Keep going 💪")
 
         st.subheader("📷 Daily Picture Upload")
-
         uploaded_file = st.file_uploader("Upload your daily photo", type=["jpg", "jpeg", "png"])
-
         if uploaded_file:
             st.image(uploaded_file, caption="Your uploaded photo", use_column_width=True)
-    elif page == "My calender":
-        st.set_page_config(page_title="📅 Calendar Task Tracker", layout="centered")
 
+    elif page == "My calendar":
         st.title("📅 My Calendar Task Tracker")
 
-        # ---------- Load tasks from file ----------
-        TASKS_FILE = "tasks.json"
-
-        if os.path.exists(TASKS_FILE):
-            with open(TASKS_FILE, "r") as f:
-                tasks_by_date = json.load(f)
-        else:
-            tasks_by_date = {}
-
-        # ---------- Select a date ----------
         selected_date = st.date_input("Choose a date to view or add tasks", value=date.today())
         date_str = selected_date.strftime("%Y-%m-%d")
 
-        # ---------- Add a new task ----------
         st.subheader(f"📝 Add Task for {date_str}")
         task_input = st.text_input("Enter your task")
 
@@ -105,95 +110,91 @@ else:
                 with open(TASKS_FILE, "w") as f:
                     json.dump(tasks_by_date, f)
                 st.success("Task added!")
+                st.experimental_rerun()
             else:
                 st.warning("Please enter a valid task.")
 
-        # ---------- Display tasks for selected date ----------
         st.subheader(f"📌 Tasks on {date_str}")
         if date_str in tasks_by_date and tasks_by_date[date_str]:
+            changed = False
             for i, task_obj in enumerate(tasks_by_date[date_str]):
                 col1, col2 = st.columns([0.05, 0.95])
                 with col1:
                     done = st.checkbox("", value=task_obj["done"], key=f"{date_str}_{i}")
                 with col2:
                     st.markdown(f"- {task_obj['task']}")
-                # Update task status
-                tasks_by_date[date_str][i]["done"] = done
-            # Save updated status
-            with open(TASKS_FILE, "w") as f:
-                json.dump(tasks_by_date, f)
+                if done != task_obj["done"]:
+                    tasks_by_date[date_str][i]["done"] = done
+                    changed = True
+            if changed:
+                with open(TASKS_FILE, "w") as f:
+                    json.dump(tasks_by_date, f)
         else:
             st.info("No tasks found for this date.")
-            
 
-    
     elif page == "To-Do List":
-        st.write("📝 Your tasks for today:")
-        TODO_FILE = "todo.json"
-
-        # Load tasks from file
+        st.title("📝 Your To-Do List")
         if os.path.exists(TODO_FILE):
             with open(TODO_FILE, "r") as f:
-                st.session_state.tasks = json.load(f)
+                tasks = json.load(f)
         else:
-            st.session_state.tasks = []
+            tasks = []
 
-        # Add new task
         new_task = st.text_input("Add a new task")
         if st.button("Add Task") and new_task:
-            st.session_state.tasks.append({"task": new_task, "done": False})
+            tasks.append({"task": new_task, "done": False})
             with open(TODO_FILE, "w") as f:
-                json.dump(st.session_state.tasks, f)
+                json.dump(tasks, f)
+            st.experimental_rerun()
 
-        # Display tasks with checkboxes
-        for i, task in enumerate(st.session_state.tasks):
-            checked = st.checkbox(task["task"], value=task["done"], key=i)
-            st.session_state.tasks[i]["done"] = checked
+        changed = False
+        for i, task in enumerate(tasks):
+            checked = st.checkbox(task["task"], value=task["done"], key=f"todo_{i}")
+            if checked != task["done"]:
+                tasks[i]["done"] = checked
+                changed = True
+        if changed:
+            with open(TODO_FILE, "w") as f:
+                json.dump(tasks, f)
 
-        # Save updated task status
-        with open(TODO_FILE, "w") as f:
-            json.dump(st.session_state.tasks, f)
-                # Add to-do list logic here
     elif page == "Habits":
-        st.write("📊 Track your habits:")
-        DATA_FILE = "habits.json"
-
-        # Load habit history
-        if os.path.exists(DATA_FILE):
-            with open(DATA_FILE, "r") as f:
+        st.title("📊 Habit Tracker")
+        if os.path.exists(HABITS_FILE):
+            with open(HABITS_FILE, "r") as f:
                 habit_data = json.load(f)
         else:
             habit_data = {}
 
-        # Add new habit
         new_habit = st.text_input("Add a new habit")
         if st.button("Add Habit") and new_habit:
             if new_habit not in habit_data:
                 habit_data[new_habit] = []
-                with open(DATA_FILE, "w") as f:
+                with open(HABITS_FILE, "w") as f:
                     json.dump(habit_data, f)
+                st.experimental_rerun()
 
-        # Display habits
         st.subheader("🌿 Track Today's Habits")
-        today = datetime.now().strftime("%Y-%m-%d")
-
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        changed = False
         for habit in habit_data:
-            if st.checkbox(habit):
-                if today not in habit_data[habit]:
-                    habit_data[habit].append(today)
-                    with open(DATA_FILE, "w") as f:
-                        json.dump(habit_data, f)
+            checked = st.checkbox(habit, key=f"habit_{habit}", value=today_str in habit_data[habit])
+            if checked and today_str not in habit_data[habit]:
+                habit_data[habit].append(today_str)
+                changed = True
+            elif not checked and today_str in habit_data[habit]:
+                habit_data[habit].remove(today_str)
+                changed = True
+        if changed:
+            with open(HABITS_FILE, "w") as f:
+                json.dump(habit_data, f)
 
-        # Monthly count
         st.subheader("📊 This Month's Progress")
         current_month = datetime.now().strftime("%Y-%m")
-
         for habit, dates in habit_data.items():
             count = sum(1 for d in dates if d.startswith(current_month))
             st.write(f"✅ **{habit}**: {count} times this month")
-                # Add habit tracker logic here
+
     elif page == "Portfolio":
-        st.write("💼 Your projects and skills:")
         st.title("💼 Govardhani's Portfolio")
 
         st.markdown("Hi, I'm **Govardhani**! I’m passionate about tech, open-source, and building projects that solve real-world problems.")
@@ -202,9 +203,10 @@ else:
         st.write("B.Tech in Internet of Things (IoT)")
 
         st.markdown("### 🛠️ Tech Skills")
-        st.write("- **Current:** Python, C, HTML,Golang")
+        st.write("- **Current:** Python, C, HTML, Golang")
         st.write("- **Learning:** SQL, DSA")
         st.write("- **Also familiar with:** IoT systems, computer fundamentals")
+
         st.markdown("### 🧰 Tech Stack")
         tech_stack = [
             "🧠 Python, C, Go",
@@ -224,7 +226,7 @@ else:
         with col1:
             st.markdown("[🔗 GitHub](https://github.com/GGovardhani)")
         with col2:
-            st.markdown("[🔗 LinkedIn](https://www.linkedin.com/in/govardhani-gokaraju-gg)")  # Replace with your actual LinkedIn URL
+            st.markdown("[🔗 LinkedIn](https://www.linkedin.com/in/govardhani-gokaraju-gg)")
 
         st.markdown("### 🧪 Projects I've Worked On")
         st.write("- 🎮 **Mini Python Games**: Rock-Paper-Scissors, Number Guessing Game")
