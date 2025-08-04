@@ -17,11 +17,11 @@ USERS = {
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
-def safe_rerun():
-    # Safe rerun by toggling a session_state variable to force refresh
-    if "rerun_trigger" not in st.session_state:
-        st.session_state.rerun_trigger = False
-    st.session_state.rerun_trigger = not st.session_state.rerun_trigger
+# def safe_rerun():
+#     # Safe rerun by toggling a session_state variable to force refresh
+#     if "rerun_trigger" not in st.session_state:
+#         st.session_state.rerun_trigger = False
+#     st.session_state.rerun_trigger = not st.session_state.rerun_trigger
 
 if not st.session_state.logged_in:
     st.title("🔐 Login to Govardhani Space")
@@ -32,7 +32,7 @@ if not st.session_state.logged_in:
             st.session_state.logged_in = True
             st.session_state.user = username
             st.success(f"Login successful! Welcome {username}.")
-            safe_rerun()
+            st.rerun()
         else:
             st.error("Invalid credentials. Try again.")
 
@@ -111,7 +111,7 @@ else:
                 with open(TASKS_FILE, "w") as f:
                     json.dump(tasks_by_date, f)
                 st.success("Task added!")
-                safe_rerun()
+                st.rerun()
             else:
                 st.warning("Please enter a valid task.")
 
@@ -158,7 +158,7 @@ else:
             tasks.append({"task": new_task, "done": False})
             with open(TODO_FILE, "w") as f:
                 json.dump(tasks, f)
-            safe_rerun()
+            st.rerun()
 
         updated_tasks = []
         for i, task in enumerate(tasks):
@@ -191,7 +191,7 @@ else:
                 habit_data[new_habit] = []
                 with open(HABITS_FILE, "w") as f:
                     json.dump(habit_data, f)
-                safe_rerun()
+                st.rerun()
 
         st.subheader("🌿 Track Today's Habits")
         today_str = datetime.now().strftime("%Y-%m-%d")
